@@ -1,5 +1,6 @@
 # tiny
 
+this is a fork of tiny launcher and its desigined for edukit project thanks to the creator
 A minimal Android launcher built around the idea that your phone's home screen should get out of the way.
 
 No feeds. No widgets. No noise. Just your apps, the time, and silence.
@@ -65,10 +66,4 @@ The home screen is the most-opened surface on your phone. tiny keeps it calm —
 ## Requirements
 
 - Android 8.0 (API 26) or higher
-- No special permissions beyond what a launcher needs
 
----
-
-## Privacy
-
-tiny collects no data. See [PRIVACY.md](PRIVACY_POLICY.md) for the full policy.
