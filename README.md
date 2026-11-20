@@ -1,4 +1,4 @@
-# tiny
+# edukit android launcher
 
 this is a fork of tiny launcher and its desigined for edukit project thanks to the creator
 A minimal Android launcher built around the idea that your phone's home screen should get out of the way.
