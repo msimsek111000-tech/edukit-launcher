@@ -1,122 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background"
-    android:orientation="vertical">
+    android:background="#121212"
+    android:orientation="vertical"
+    android:padding="16dp">
 
-    <!-- Fills up to status bar height (set in code) -->
-    <View
-        android:id="@+id/status_spacer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp" />
-
-    <!-- Top bar: battery · net · settings -->
-    <LinearLayout
-        android:id="@+id/top_bar"
+    <TextView
+        android:id="@+id/tvTimeBank"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="24dp"
-        android:paddingVertical="10dp">
+        android:text="Screen Time: 0s"
+        android:textColor="#00E676"
+        android:textSize="24sp"
+        android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/tv_battery"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="sans-serif"
-            android:layout_marginEnd="10dp"
-            android:textColor="@color/text_secondary"
-            android:textStyle="bold"
-            android:textSize="12sp" />
+    <Button
+        android:id="@+id/btnOpenEduApp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Open Edu Kit Apps" />
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+    <Button
+        android:id="@+id/btnSpendTime"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Use Screen Time (Launcher)" />
 
-        <TextView
-            android:id="@+id/tv_net"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="14dp"
-            android:paddingStart="5dp"
-            android:textColor="@color/text_dim"
-            android:textSize="12sp" />
+    <Button
+        android:id="@+id/btnParentMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Parent Mode (PIN)" />
 
-        <TextView
-            android:id="@+id/btn_settings"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:gravity="center"
-            android:text="@string/settings_icon"
-            android:textColor="@color/text_dim"
-            android:textSize="18sp" />
-    </LinearLayout>
-
-    <!-- Center zone: clock floats in available space -->
-    <LinearLayout
+    <WebView
+        android:id="@+id/eduWebView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginTop="14dp"
         android:layout_weight="1"
-        android:paddingHorizontal="20dp"
-        android:orientation="vertical">
-
-        <!-- Nudge clock slightly above true center -->
-        <Space
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="0.2" />
-
-        <TextView
-            android:id="@+id/tv_time"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-thin"
-            android:includeFontPadding="false"
-            android:letterSpacing="-0.03"
-            android:textColor="@color/text_primary"
-            android:textStyle="bold"
-            android:textSize="75sp" />
-
-        <TextView
-            android:id="@+id/tv_date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:fontFamily="sans-serif-light"
-            android:letterSpacing="0.03"
-            android:textColor="@color/text_secondary"
-            android:textStyle="italic"
-            android:textSize="18sp" />
-
-        <TextView
-            android:id="@+id/tv_alarm"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_marginTop="5dp"
-            android:textColor="@color/text_dim"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <Space
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="0.7" />
-
-    </LinearLayout>
-
-    <!-- Pinned apps anchored at bottom -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_pinned"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:clipToPadding="false"
-        android:overScrollMode="never"
-        android:paddingBottom="32dp" />
+        android:visibility="gone" />
 
 </LinearLayout>
