@@ -1,377 +1,180 @@
-package in.atulpatare.tiny;
-
-import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.AlarmManager;
 import android.app.AlertDialog;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.net.ConnectivityManager;
-import android.net.NetworkCapabilities;
-import android.os.BatteryManager;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.provider.Settings;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.view.View;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
-import android.widget.TextView;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
 
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
-
-import in.atulpatare.tiny.ui.drawer.AppDrawerActivity;
-import in.atulpatare.tiny.ui.models.AppInfo;
-import in.atulpatare.tiny.ui.selector.AppSelectActivity;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 
 public class MainActivity extends Activity {
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private TextView tvBattery, tvNet, tvTime, tvDate, tvAlarm;
-    private final BroadcastReceiver batteryReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context ctx, Intent intent) {
-            refreshBattery(intent);
-        }
-    };
-    private RecyclerView rvPinned;
-    private PinnedAppsAdapter pinnedAdapter;
-    private GestureDetector gestureDetector;
-    private Runnable clockRunnable;
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    private ConfigManager configManager;
+    private Button parentBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        tvBattery = findViewById(R.id.tv_battery);
-        tvNet = findViewById(R.id.tv_net);
-        tvTime = findViewById(R.id.tv_time);
-        tvDate = findViewById(R.id.tv_date);
-        tvAlarm = findViewById(R.id.tv_alarm);
-        rvPinned = findViewById(R.id.rv_pinned);
+        configManager = new ConfigManager(this);
 
-        applyWindowInsets();
-        setupGestureDetector();
-        setupPinnedApps();
-        startClock();
+        // Optional: wire a button in activity_main.xml with id "parent_btn"
+        parentBtn = findViewById(R.id.parent_btn);
+        if (parentBtn != null) {
+            parentBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    promptParentPin();
+                }
+            });
+        }
 
-        findViewById(R.id.btn_settings).setOnClickListener(v -> openSettingsMenu());
+        checkFirstBootPin();
     }
 
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideStatusBar();
+    private void checkFirstBootPin() {
+        String savedPin = configManager.getPin();
+        if (savedPin == null || savedPin.trim().isEmpty()) {
+            showSetPinDialog(true);
+        }
     }
 
-    private void hideStatusBar() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowInsetsController ctrl = getWindow().getInsetsController();
-            if (ctrl != null) {
-                ctrl.hide(WindowInsets.Type.statusBars());
-                ctrl.setSystemBarsBehavior(
-                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+    private void showSetPinDialog(final boolean isFirstBoot) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(isFirstBoot ? "First Boot: Set Parent PIN" : "Change Parent PIN");
+        builder.setMessage("Enter a 4-digit PIN to protect launcher settings:");
+        builder.setCancelable(!isFirstBoot);
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(4)});
+        input.setHint("4-digit PIN");
+        builder.setView(input);
+
+        builder.setPositiveButton("Save PIN", null);
+        if (!isFirstBoot) {
+            builder.setNegativeButton("Cancel", null);
+        }
+
+        final AlertDialog dialog = builder.create();
+        dialog.show();
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String newPin = input.getText().toString().trim();
+                if (newPin.matches("\\d{4}")) {
+                    configManager.setPin(newPin);
+                    Toast.makeText(MainActivity.this, "Parent PIN saved", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                } else {
+                    input.setError("PIN must be 4 digits");
+                }
             }
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        }
+        });
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        refreshBattery(null);
-        refreshNet();
-        refreshAlarm();
-        pinnedAdapter.updateApps(loadPinned());
-    }
+    private void promptParentPin() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Parent Access");
+        builder.setMessage("Enter Parent PIN:");
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        try {
-            unregisterReceiver(batteryReceiver);
-        } catch (Exception ignored) {
-        }
-    }
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(4)});
+        builder.setView(input);
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (clockRunnable != null) handler.removeCallbacks(clockRunnable);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 1) pinnedAdapter.updateApps(loadPinned());
-    }
-
-    // ── Window insets ─────────────────────────────────────────────────────────
-
-    private void applyWindowInsets() {
-        View statusSpacer = findViewById(R.id.status_spacer);
-        View rootLayout = findViewById(R.id.root_layout);
-        rootLayout.setOnApplyWindowInsetsListener((v, insets) -> {
-            int topInset;
-            int bottomInset;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                topInset = insets.getInsets(WindowInsets.Type.statusBars()).top;
-                bottomInset = insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+        builder.setPositiveButton("Unlock", (dialog, which) -> {
+            String entered = input.getText().toString().trim();
+            String savedPin = configManager.getPin();
+            if (savedPin != null && entered.equals(savedPin)) {
+                openParentMenu();
             } else {
-                topInset = insets.getSystemWindowInsetTop();
-                bottomInset = insets.getSystemWindowInsetBottom();
-            }
-
-            statusSpacer.getLayoutParams().height = topInset;
-            statusSpacer.requestLayout();
-
-            rvPinned.setPadding(
-                    rvPinned.getPaddingLeft(), rvPinned.getPaddingTop(),
-                    rvPinned.getPaddingRight(), bottomInset + dp(32));
-            return insets;
-        });
-    }
-
-    // ── Gesture detector — horizontal fling opens the app drawer ─────────────
-
-    private void setupGestureDetector() {
-        gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onFling(MotionEvent e1, MotionEvent e2,
-                                   float velocityX, float velocityY) {
-                if (e1 == null || e2 == null) return false;
-                float dx = e2.getX() - e1.getX();
-                float dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) > Math.abs(dy)
-                        && Math.abs(dx) > dp(60)
-                        && Math.abs(velocityX) > 200) {
-                    openDrawer();
-                    return true;
-                }
-                return false;
+                Toast.makeText(MainActivity.this, "Wrong PIN", Toast.LENGTH_SHORT).show();
             }
         });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
     }
 
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        gestureDetector.onTouchEvent(ev);
-        return super.dispatchTouchEvent(ev);
-    }
-
-    // ── Pinned apps ───────────────────────────────────────────────────────────
-
-    private void setupPinnedApps() {
-        pinnedAdapter = new PinnedAppsAdapter(loadPinned(), new PinnedAppsAdapter.Listener() {
-            @Override
-            public void onTap(AppInfo app) {
-                launch(app.packageName);
-            }
-
-            @Override
-            public void onHold(AppInfo app, int pos) {
-                showAppMenu(app, pos);
-            }
-        });
-        rvPinned.setLayoutManager(new LinearLayoutManager(this) {
-            @Override
-            public boolean canScrollVertically() {
-                return false;
-            }
-        });
-        rvPinned.setAdapter(pinnedAdapter);
-    }
-
-    List<AppInfo> loadPinned() {
-        SharedPreferences p = getSharedPreferences(Config.PREFS, MODE_PRIVATE);
-        String csv = p.getString(Config.KEY_PINNED, "");
-        PackageManager pm = getPackageManager();
-        List<AppInfo> list = new ArrayList<>();
-
-        if (csv.isEmpty()) {
-            for (String pkg : Config.DEFAULT_PKGS) {
-                AppInfo info = AppInfo.from(pm, pkg);
-                if (info != null && !listContainsPkg(list, pkg)) {
-                    list.add(info);
-                }
-                if (list.size() == 5) break;
-            }
-        } else {
-            for (String pkg : csv.split(",")) {
-                AppInfo info = AppInfo.from(pm, pkg.trim());
-                if (info != null) list.add(info);
-            }
-        }
-        return list;
-    }
-
-    void savePinned(List<String> pkgs) {
-        StringBuilder sb = new StringBuilder();
-        for (String p : pkgs) {
-            if (sb.length() > 0) sb.append(",");
-            sb.append(p);
-        }
-        getSharedPreferences(Config.PREFS, MODE_PRIVATE)
-                .edit().putString(Config.KEY_PINNED, sb.toString()).apply();
-    }
-
-    private boolean listContainsPkg(List<AppInfo> list, String pkg) {
-        for (AppInfo a : list) if (a.packageName.equals(pkg)) return true;
-        return false;
-    }
-
-    // ── Clock ─────────────────────────────────────────────────────────────────
-
-    private void startClock() {
-        clockRunnable = new Runnable() {
-            @Override
-            public void run() {
-                tickClock();
-                handler.postDelayed(this, 1000);
-            }
-        };
-        handler.post(clockRunnable);
-    }
-
-    private void tickClock() {
-        boolean h24 = android.text.format.DateFormat.is24HourFormat(this);
-        String timeFmt = h24 ? "HH:mm" : "h:mm";
-        tvTime.setText(new SimpleDateFormat(timeFmt, Locale.getDefault()).format(new Date()).toLowerCase());
-        tvDate.setText(new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(new Date()).toLowerCase());
-    }
-
-    // ── Battery ───────────────────────────────────────────────────────────────
-
-    @SuppressLint("SetTextI18n")
-    private void refreshBattery(Intent intent) {
-        if (intent == null) {
-            intent = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        }
-        if (intent == null) return;
-        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-        int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        if (level < 0 || scale <= 0) return;
-        int pct = (level * 100) / scale;
-        boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING
-                || status == BatteryManager.BATTERY_STATUS_FULL;
-        tvBattery.setText(pct + "%" + (charging ? " ⚡" : ""));
-    }
-
-    // ── Network ───────────────────────────────────────────────────────────────
-
-    private void refreshNet() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-        android.net.Network net = cm.getActiveNetwork();
-        if (net == null) {
-            tvNet.setText("");
-            return;
-        }
-        NetworkCapabilities caps = cm.getNetworkCapabilities(net);
-        if (caps == null) {
-            tvNet.setText("");
-            return;
-        }
-        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-            tvNet.setText(R.string.wifi);
-        } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-            tvNet.setText(R.string.data);
-        } else {
-            tvNet.setText("");
-        }
-    }
-
-    // ── Alarm ─────────────────────────────────────────────────────────────────
-
-    @SuppressLint("SetTextI18n")
-    private void refreshAlarm() {
-        AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
-        AlarmManager.AlarmClockInfo next = am.getNextAlarmClock();
-        if (next != null) {
-            String fmt = new SimpleDateFormat("EEE, h:mm a", Locale.getDefault())
-                    .format(new Date(next.getTriggerTime()));
-            tvAlarm.setText("⏰  " + fmt.toLowerCase());
-            tvAlarm.setVisibility(View.VISIBLE);
-        } else {
-            tvAlarm.setVisibility(View.GONE);
-        }
-    }
-
-    // ── Navigation ────────────────────────────────────────────────────────────
-
-    private void openDrawer() {
-        startActivity(new Intent(this, AppDrawerActivity.class));
-        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-    }
-
-    private void openSettingsMenu() {
+    private void openParentMenu() {
+        String[] options = {"Change PIN", "Add +60s Screen Time"};
         new AlertDialog.Builder(this)
-                .setTitle("tiny")
-                .setItems(new String[]{
-                        "edit home apps",
-                        "set as default launcher",
-                }, (d, w) -> {
-                    if (w == 0)
-                        startActivityForResult(new Intent(this, AppSelectActivity.class), 1);
-                    else if (w == 1)
-                        startActivity(new Intent(Settings.ACTION_HOME_SETTINGS));
-                }).show();
+                .setTitle("Parent Controls")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        showSetPinDialog(false);
+                    } else if (which == 1) {
+                        int updated = configManager.getSeconds() + 60;
+                        configManager.setSeconds(updated);
+                        Toast.makeText(MainActivity.this, "Screen time: " + updated + "s", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
     }
 
-    private void launch(String packageName) {
-        Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
-        if (intent != null) startActivity(intent);
-    }
+    public static class ConfigManager {
+        private static final String FILE_NAME = "config.txt";
+        private final File configFile;
 
-    private void showAppMenu(AppInfo app, int pos) {
-        new AlertDialog.Builder(this)
-                .setTitle(app.name)
-                .setItems(new String[]{"remove from home", "app info"}, (d, w) -> {
-                    if (w == 0) removeFromHome(pos);
-                    else openAppInfo(app.packageName);
-                }).show();
-    }
+        public ConfigManager(Context context) {
+            this.configFile = new File(context.getFilesDir(), FILE_NAME);
+            if (!configFile.exists()) {
+                writeConfig("", 0);
+            }
+        }
 
-    private void removeFromHome(int pos) {
-        List<AppInfo> list = new ArrayList<>(pinnedAdapter.getApps());
-        list.remove(pos);
-        List<String> pkgs = new ArrayList<>();
-        for (AppInfo a : list) pkgs.add(a.packageName);
-        savePinned(pkgs);
-        pinnedAdapter.updateApps(list);
-    }
+        public String getPin() {
+            return readField("pin", "");
+        }
 
-    private void openAppInfo(String pkg) {
-        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-        intent.setData(android.net.Uri.parse("package:" + pkg));
-        startActivity(intent);
-    }
+        public void setPin(String pin) {
+            writeConfig(pin, getSeconds());
+        }
 
-    // ── Util ─────────────────────────────────────────────────────────────────
+        public int getSeconds() {
+            String val = readField("seconds", "0");
+            try {
+                return Math.max(0, Integer.parseInt(val.trim()));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        public void setSeconds(int seconds) {
+            writeConfig(getPin(), Math.max(0, seconds));
+        }
+
+        private String readField(String key, String fallback) {
+            if (!configFile.exists()) return fallback;
+            try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split("=", 2);
+                    if (parts.length == 2 && parts[0].trim().equals(key)) {
+                        return parts[1].trim();
+                    }
+                }
+            } catch (IOException ignored) {
+            }
+            return fallback;
+        }
+
+        private void writeConfig(String pin, int seconds) {
+            try (FileWriter writer = new FileWriter(configFile, false)) {
+                writer.write("pin=" + (pin == null ? "" : pin.trim()) + "\n");
+                writer.write("seconds=" + Math.max(0, seconds) + "\n");
+            } catch (IOException ignored) {
+            }
+        }
     }
 }
