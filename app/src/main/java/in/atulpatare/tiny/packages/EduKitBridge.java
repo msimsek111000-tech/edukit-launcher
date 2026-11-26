@@ -1,4 +1,4 @@
-package com.example.edukit;
+package com.packages.edukit;
 
 import android.content.Context;
 import android.webkit.JavascriptInterface;
